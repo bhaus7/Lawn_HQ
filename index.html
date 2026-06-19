@@ -423,7 +423,7 @@ function renderConditions(w) {
   const el = document.getElementById('conditions-grid');
   if (!w || !w.daily) { el.innerHTML = ''; return; }
   const d = w.daily;
-  const soilTemp = d.soil_temperature_0_to_7cm_mean ? Math.round(d.soil_temperature_0_to_7cm_mean[0] * 9/5 + 32) : null;
+  const soilTemp = d.soil_temperature_0_to_7cm_mean ? Math.round(d.soil_temperature_0_to_7cm_mean[0]) : null;
   const rain7 = d.precipitation_sum.slice(0,7).reduce((a,b) => a+b, 0);
   const et = d.et0_fao_evapotranspiration ? d.et0_fao_evapotranspiration[0] : null;
   const hi = Math.round(d.temperature_2m_max[0]);
@@ -509,7 +509,7 @@ function generateTasks(w) {
   const rain0 = d ? d.precipitation_sum[0] : 0;
   const rain7 = d ? d.precipitation_sum.slice(0,7).reduce((a,b)=>a+b,0) : 0;
   const gp = calcGrowthPotential(hi, (d ? Math.round(d.temperature_2m_min[0]) : 55), grass);
-  const soilTemp = d && d.soil_temperature_0_to_7cm_mean ? Math.round(d.soil_temperature_0_to_7cm_mean[0] * 9/5 + 32) : null;
+  const soilTemp = d && d.soil_temperature_0_to_7cm_mean ? Math.round(d.soil_temperature_0_to_7cm_mean[0]) : null;
 
   // Mowing check
   if (state.mow.lastMowed) {
