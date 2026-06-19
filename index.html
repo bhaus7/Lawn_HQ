@@ -425,7 +425,7 @@ function renderConditions(w) {
   const d = w.daily;
   console.log(w.daily);
   console.log(w.daily.soil_temperature_0_to_7cm_mean);
-  const soilTemp = d.soil_temperature_0_to_7cm_mean ? Math.round(d.soil_temperature_0_to_7cm_mean[0]) : null;
+  const soilTemp = d.soil_temperature_0_to_7cm_mean?.[0] != null ? Math.round(d.soil_temperature_0_to_7cm_mean[0]) : null;
   const rain7 = d.precipitation_sum.slice(0,7).reduce((a,b) => a+b, 0);
   const et = d.et0_fao_evapotranspiration ? d.et0_fao_evapotranspiration[0] : null;
   const hi = Math.round(d.temperature_2m_max[0]);
@@ -440,7 +440,7 @@ function renderConditions(w) {
       <div class="cond-value">${growthPotential.label}</div>
       <div class="progress-bar"><div class="progress-fill" style="width:${growthPotential.pct}%;background:var(--green-400)"></div></div>
     </div>
-    ${soilTemp ? `<div class="cond-card">
+    ${soilTemp !== null ? `<div class="cond-card">
       <div class="cond-icon">🌡️</div>
       <div class="cond-label">Soil temp</div>
       <div class="cond-value">${soilTemp}°F</div>
