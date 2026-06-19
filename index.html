@@ -423,6 +423,8 @@ function renderConditions(w) {
   const el = document.getElementById('conditions-grid');
   if (!w || !w.daily) { el.innerHTML = ''; return; }
   const d = w.daily;
+  console.log(w.daily);
+  console.log(w.daily.soil_temperature_0_to_7cm_mean);
   const soilTemp = d.soil_temperature_0_to_7cm_mean ? Math.round(d.soil_temperature_0_to_7cm_mean[0]) : null;
   const rain7 = d.precipitation_sum.slice(0,7).reduce((a,b) => a+b, 0);
   const et = d.et0_fao_evapotranspiration ? d.et0_fao_evapotranspiration[0] : null;
