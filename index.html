@@ -15,6 +15,7 @@
     --gray-50: #F1EFE8; --gray-100: #D3D1C7; --gray-200: #B4B2A9;
     --gray-400: #888780; --gray-600: #5F5E5A; --gray-800: #444441;
     --teal-50: #E1F5EE; --teal-100: #9FE1CB; --teal-400: #1D9E75; --teal-800: #085041;
+    --purple-50: #F1E9F9; --purple-100: #D7BFEF; --purple-400: #8B4FD1; --purple-800: #4A2470;
     --bg: #f7f8f5;
     --surface: #ffffff;
     --border: rgba(0,0,0,0.1);
@@ -35,6 +36,7 @@
       --red-50: #501313; --red-100: #791F1F; --red-400: #E24B4A; --red-800: #F7C1C1;
       --gray-50: #2C2C2A; --gray-100: #444441; --gray-200: #5F5E5A; --gray-600: #B4B2A9;
       --teal-50: #04342C; --teal-100: #085041; --teal-400: #1D9E75; --teal-800: #9FE1CB;
+      --purple-50: #2A1B40; --purple-100: #4A2470; --purple-400: #8B4FD1; --purple-800: #D7BFEF;
       --bg: #111211;
     }
   }
@@ -64,6 +66,7 @@
   .badge-red { background: var(--red-50); color: var(--red-800); }
   .badge-blue { background: var(--blue-50); color: var(--blue-800); }
   .badge-gray { background: var(--gray-50); color: var(--gray-600); }
+  .badge-purple { background: var(--purple-50); color: var(--purple-800); }
   .task-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 1rem 1.25rem; display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
   .task-card.done { opacity: 0.5; }
   .task-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 18px; }
@@ -134,6 +137,19 @@
   .empty-state p { font-size: 14px; margin-top: 8px; }
   details summary { cursor: pointer; font-size: 13px; color: var(--text-muted); padding: 6px 0; user-select: none; }
   details[open] summary { color: var(--text); }
+
+  /* YARD-SPECIFIC STYLES */
+  .yard-section { margin-bottom: 2rem; }
+  .yard-header { display: flex; align-items: center; gap: 10px; margin-bottom: 1rem; }
+  .yard-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .yard-icon.front { background: var(--green-50); }
+  .yard-icon.back { background: var(--purple-50); }
+  .yard-title { font-size: 16px; font-weight: 600; }
+  .yard-subtitle { font-size: 12px; color: var(--text-muted); }
+  .yard-switcher { display: inline-flex; background: var(--gray-50); border-radius: var(--radius-sm); padding: 3px; margin-bottom: 1.25rem; }
+  .yard-pill { padding: 7px 18px; border: none; background: none; cursor: pointer; border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--text-muted); font-family: inherit; transition: all 0.15s; white-space: nowrap; }
+  .yard-pill.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+  .yard-pill:hover:not(.active) { color: var(--text); }
 </style>
 </head>
 <body>
@@ -157,22 +173,21 @@
 
 <div class="main">
 
-  <!-- TODAY PAGE -->
+  <!-- TODAY PAGE (combined view — both yards) -->
   <div id="page-today" class="page active">
     <div id="setup-notice" class="setup-notice" style="display:none">
-      <p>⚙️ <strong>Set up your lawn</strong> — Go to Settings to enter your location and grass type so we can show personalized recommendations.</p>
+      <p>⚙️ <strong>Set up your lawn</strong> — Go to Settings to enter your location and grass type for each yard so we can show personalized recommendations.</p>
     </div>
 
     <div id="weather-strip" class="weather-strip"></div>
 
-    <div class="conditions-grid" id="conditions-grid"></div>
-
-    <p class="section-title">Today's tasks</p>
-    <div id="task-list"></div>
+    <div id="yards-today-container"></div>
   </div>
 
-  <!-- MOWING PAGE -->
+  <!-- MOWING PAGE (per-yard) -->
   <div id="page-mowing" class="page">
+    <div class="yard-switcher" id="mow-yard-switcher"></div>
+
     <div class="card" style="margin-bottom:1.5rem">
       <p class="section-title" style="margin-bottom:10px">Mowing settings</p>
       <div class="form-grid">
@@ -200,8 +215,10 @@
     </div>
   </div>
 
-  <!-- TREATMENTS PAGE -->
+  <!-- TREATMENTS PAGE (per-yard) -->
   <div id="page-treatments" class="page">
+    <div class="yard-switcher" id="treat-yard-switcher"></div>
+
     <div class="card" style="margin-bottom:1.5rem">
       <p class="section-title" style="margin-bottom:12px">Log a treatment</p>
       <div class="form-grid">
@@ -258,6 +275,8 @@
 
   <!-- DIAGNOSE PAGE -->
   <div id="page-diagnose" class="page">
+    <div class="yard-switcher" id="diag-yard-switcher"></div>
+
     <p style="font-size:14px;color:var(--text-muted);margin-bottom:1.5rem;line-height:1.6">Take a close-up photo of a problem area — weeds, discoloration, bare spots, or insects. The AI will identify the issue and recommend treatment.</p>
 
     <div class="diag-drop card" id="diag-drop" onclick="document.getElementById('diag-input').click()">
@@ -280,14 +299,24 @@
   <!-- SETTINGS PAGE -->
   <div id="page-settings" class="page">
     <div class="card" style="margin-bottom:1.5rem">
-      <p class="section-title" style="margin-bottom:12px">Lawn profile</p>
+      <p class="section-title" style="margin-bottom:12px">Property location</p>
       <div class="form-row">
-        <label>City / Zip code (for weather)</label>
+        <label>City / Zip code (for weather — shared across all yards)</label>
         <div style="display:flex;gap:8px">
           <input type="text" id="set-location" placeholder="e.g. Highland Village, TX or 75077" style="flex:1">
           <button class="btn btn-sm" onclick="geocodeLocation()">Find</button>
         </div>
         <div id="geo-status" style="font-size:12px;color:var(--text-muted);margin-top:5px"></div>
+      </div>
+    </div>
+
+    <div class="yard-switcher" id="settings-yard-switcher"></div>
+
+    <div class="card" style="margin-bottom:1.5rem">
+      <p class="section-title" style="margin-bottom:12px" id="settings-yard-label">Yard profile</p>
+      <div class="form-row">
+        <label>Yard name</label>
+        <input type="text" id="set-yard-name" placeholder="e.g. Front Yard">
       </div>
       <div class="form-row">
         <label>Grass type</label>
@@ -314,7 +343,7 @@
           <option value="none">No irrigation (rain only)</option>
         </select>
       </div>
-      <button class="btn btn-primary" onclick="saveSettings()">Save settings</button>
+      <button class="btn btn-primary" onclick="saveSettings()">Save yard settings</button>
     </div>
 
     <div class="card">
@@ -330,21 +359,88 @@
 
 <script>
 const ANTHROPIC_KEY_HEADER = 'x-api-key';
+const YARD_IDS = ['front', 'back'];
+
+function defaultYard(name) {
+  return {
+    name: name,
+    grass: 'mixed',
+    area: 5000,
+    irrigation: 'sprinkler',
+    tasks: {},
+    treatments: [],
+    mow: { height: 3, freq: 7, lastMowed: '' }
+  };
+}
 
 let state = {
-  settings: { lat: 33.0865, lon: -97.0641, location: 'Highland Village, TX', grass: 'mixed', area: 5000, irrigation: 'sprinkler' },
-  tasks: {},
-  treatments: [],
-  mow: { height: 3, freq: 7, lastMowed: '' },
+  location: { lat: 33.0865, lon: -97.0641, location: 'Highland Village, TX' },
+  yards: {
+    front: defaultYard('Front Yard'),
+    back: defaultYard('Back Yard')
+  },
   weather: null,
   weatherDate: null
 };
 
+// Active yard selection per-tab (not persisted — resets to 'front' on reload, that's fine)
+let activeYard = { mowing: 'front', treatments: 'front', diagnose: 'front', settings: 'front' };
+
 function loadState() {
   try {
     const saved = localStorage.getItem('lawnhq-state');
-    if (saved) state = { ...state, ...JSON.parse(saved) };
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      state = migrateState(parsed);
+    }
   } catch(e) {}
+}
+
+// MIGRATION: handle both old single-profile format and new multi-yard format
+function migrateState(parsed) {
+  // Already in new format
+  if (parsed.yards && parsed.yards.front && parsed.yards.back) {
+    // Ensure both yards have all required fields (in case of partial saves)
+    YARD_IDS.forEach(id => {
+      parsed.yards[id] = { ...defaultYard(id === 'front' ? 'Front Yard' : 'Back Yard'), ...parsed.yards[id] };
+    });
+    if (!parsed.location) parsed.location = { lat: 33.0865, lon: -97.0641, location: 'Highland Village, TX' };
+    return parsed;
+  }
+
+  // Old single-profile format detected — migrate into Front Yard, leave Back Yard fresh
+  if (parsed.settings) {
+    const migrated = {
+      location: {
+        lat: parsed.settings.lat || 33.0865,
+        lon: parsed.settings.lon || -97.0641,
+        location: parsed.settings.location || 'Highland Village, TX'
+      },
+      yards: {
+        front: {
+          name: 'Front Yard',
+          grass: parsed.settings.grass || 'mixed',
+          area: parsed.settings.area || 5000,
+          irrigation: parsed.settings.irrigation || 'sprinkler',
+          tasks: parsed.tasks || {},
+          treatments: parsed.treatments || [],
+          mow: parsed.mow || { height: 3, freq: 7, lastMowed: '' }
+        },
+        back: defaultYard('Back Yard')
+      },
+      weather: null,
+      weatherDate: null
+    };
+    return migrated;
+  }
+
+  // Fallback — totally fresh state
+  return {
+    location: { lat: 33.0865, lon: -97.0641, location: 'Highland Village, TX' },
+    yards: { front: defaultYard('Front Yard'), back: defaultYard('Back Yard') },
+    weather: null,
+    weatherDate: null
+  };
 }
 
 function saveState() {
@@ -357,21 +453,43 @@ function showPage(name) {
   document.getElementById('page-' + name).classList.add('active');
   event.target.classList.add('active');
   if (name === 'today') renderToday();
-  if (name === 'mowing') renderMowing();
-  if (name === 'treatments') renderTreatments();
-  if (name === 'settings') loadSettingsForm();
+  if (name === 'mowing') { renderYardSwitcher('mow-yard-switcher', 'mowing', renderMowing); renderMowing(); }
+  if (name === 'treatments') { renderYardSwitcher('treat-yard-switcher', 'treatments', renderTreatments); renderTreatments(); }
+  if (name === 'diagnose') { renderYardSwitcher('diag-yard-switcher', 'diagnose', null); }
+  if (name === 'settings') { renderYardSwitcher('settings-yard-switcher', 'settings', loadSettingsForm); loadSettingsForm(); }
 }
 
-// WEATHER
+// YARD SWITCHER COMPONENT
+function renderYardSwitcher(containerId, tabKey, onSwitch) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = YARD_IDS.map(id => `
+    <button class="yard-pill ${activeYard[tabKey] === id ? 'active' : ''}" onclick="switchYard('${tabKey}','${id}', ${onSwitch ? onSwitch.name : 'null'})">
+      ${state.yards[id].name}
+    </button>
+  `).join('');
+}
+
+function switchYard(tabKey, yardId, callback) {
+  activeYard[tabKey] = yardId;
+  renderYardSwitcher(
+    tabKey === 'mowing' ? 'mow-yard-switcher' : tabKey === 'treatments' ? 'treat-yard-switcher' : tabKey === 'diagnose' ? 'diag-yard-switcher' : 'settings-yard-switcher',
+    tabKey,
+    callback
+  );
+  if (tabKey === 'mowing') renderMowing();
+  if (tabKey === 'treatments') renderTreatments();
+  if (tabKey === 'settings') loadSettingsForm();
+}
+
+// WEATHER (shared across yards — one location)
 async function fetchWeather() {
   const today = new Date().toDateString();
   if (state.weather && state.weatherDate === today) return state.weather;
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${state.settings.lat}&longitude=${state.settings.lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode,et0_fao_evapotranspiration&hourly=soil_temperature_0cm&current_weather=true&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=7`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${state.location.lat}&longitude=${state.location.lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode,et0_fao_evapotranspiration&hourly=soil_temperature_0cm&current_weather=true&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=auto&forecast_days=7`;
     const res = await fetch(url);
     const data = await res.json();
     state.weather = data;
-    console.log('Weather API response:', data);
     state.weatherDate = today;
     saveState();
     return data;
@@ -397,13 +515,12 @@ function dayName(dateStr, i) {
 }
 
 async function renderToday() {
-  const hasSetup = state.settings.lat && state.settings.location;
+  const hasSetup = state.location.lat && state.location.location;
   document.getElementById('setup-notice').style.display = hasSetup ? 'none' : 'block';
 
   const w = await fetchWeather();
   renderWeatherStrip(w);
-  renderConditions(w);
-  renderTasks(w);
+  renderYardsToday(w);
 }
 
 function renderWeatherStrip(w) {
@@ -420,9 +537,36 @@ function renderWeatherStrip(w) {
   `).join('');
 }
 
-function renderConditions(w) {
-  const el = document.getElementById('conditions-grid');
+// Renders BOTH yards stacked on the Today page
+function renderYardsToday(w) {
+  const container = document.getElementById('yards-today-container');
+  container.innerHTML = YARD_IDS.map(id => {
+    const yard = state.yards[id];
+    const icon = id === 'front' ? '🏡' : '🌳';
+    return `
+    <div class="yard-section">
+      <div class="yard-header">
+        <div class="yard-icon ${id}">${icon}</div>
+        <div>
+          <div class="yard-title">${yard.name}</div>
+          <div class="yard-subtitle">${grassName(yard.grass)}${yard.area ? ' · ' + yard.area.toLocaleString() + ' sq ft' : ''}</div>
+        </div>
+      </div>
+      <div class="conditions-grid" id="conditions-${id}"></div>
+      <div id="task-list-${id}"></div>
+    </div>`;
+  }).join('');
+
+  YARD_IDS.forEach(id => {
+    renderConditions(w, id);
+    renderTasks(w, id);
+  });
+}
+
+function renderConditions(w, yardId) {
+  const el = document.getElementById('conditions-' + yardId);
   if (!w || !w.daily) { el.innerHTML = ''; return; }
+  const yard = state.yards[yardId];
   const d = w.daily;
   const soilTemp = w.hourly && w.hourly.soil_temperature_0cm ? Math.round(w.hourly.soil_temperature_0cm[0]) : null;
   const rain7 = d.precipitation_sum.slice(0,7).reduce((a,b) => a+b, 0);
@@ -430,7 +574,7 @@ function renderConditions(w) {
   const hi = Math.round(d.temperature_2m_max[0]);
   const lo = Math.round(d.temperature_2m_min[0]);
 
-  const growthPotential = calcGrowthPotential(hi, lo, state.settings.grass);
+  const growthPotential = calcGrowthPotential(hi, lo, yard.grass);
 
   el.innerHTML = `
     <div class="cond-card">
@@ -463,10 +607,8 @@ function calcGrowthPotential(hi, lo, grass) {
   const isWarm = warmTypes.includes(grass);
   let pct = 0;
   if (isWarm) {
-    // Warm season optimal: 80-95°F
     if (avg >= 60 && avg <= 100) pct = Math.round(100 - Math.abs(avg - 85) * 3);
   } else {
-    // Cool season optimal: 60-75°F
     if (avg >= 35 && avg <= 85) pct = Math.round(100 - Math.abs(avg - 65) * 3);
   }
   pct = Math.max(0, Math.min(100, pct));
@@ -474,16 +616,17 @@ function calcGrowthPotential(hi, lo, grass) {
   return { pct, label };
 }
 
-function renderTasks(w) {
-  const el = document.getElementById('task-list');
-  const tasks = generateTasks(w);
+function renderTasks(w, yardId) {
+  const el = document.getElementById('task-list-' + yardId);
+  const yard = state.yards[yardId];
+  const tasks = generateTasks(w, yardId);
   const todayKey = new Date().toDateString();
-  if (!state.tasks[todayKey]) state.tasks[todayKey] = {};
+  if (!yard.tasks[todayKey]) yard.tasks[todayKey] = {};
 
   el.innerHTML = tasks.map((t, i) => {
-    const done = !!state.tasks[todayKey][i];
+    const done = !!yard.tasks[todayKey][i];
     return `
-    <div class="task-card ${done ? 'done' : ''}" id="task-${i}">
+    <div class="task-card ${done ? 'done' : ''}" id="task-${yardId}-${i}">
       <div class="task-icon task-icon-${t.color}">${t.icon}</div>
       <div class="task-content">
         <div class="task-title">${t.title}</div>
@@ -493,31 +636,32 @@ function renderTasks(w) {
           ${t.tag ? `<span class="badge badge-blue">${t.tag}</span>` : ''}
         </div>
       </div>
-      <button class="check-btn ${done ? 'checked' : ''}" onclick="toggleTask(${i})" title="Mark done">
+      <button class="check-btn ${done ? 'checked' : ''}" onclick="toggleTask('${yardId}', ${i})" title="Mark done">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
     </div>`;
-  }).join('') || '<div class="empty-state"><p>No tasks today — your lawn is looking great!</p></div>';
+  }).join('') || '<div class="empty-state"><p>No tasks today — this yard is looking great!</p></div>';
 }
 
-function generateTasks(w) {
+function generateTasks(w, yardId) {
+  const yard = state.yards[yardId];
   const tasks = [];
-  const grass = state.settings.grass;
-  const irrigation = state.settings.irrigation;
+  const grass = yard.grass;
+  const irrigation = yard.irrigation;
   const month = new Date().getMonth() + 1;
   const d = w && w.daily;
   const hi = d ? Math.round(d.temperature_2m_max[0]) : 75;
   const rain0 = d ? d.precipitation_sum[0] : 0;
   const rain7 = d ? d.precipitation_sum.slice(0,7).reduce((a,b)=>a+b,0) : 0;
   const gp = calcGrowthPotential(hi, (d ? Math.round(d.temperature_2m_min[0]) : 55), grass);
-  const soilTemp = w.hourly && w.hourly.soil_temperature_0cm ? Math.round(w.hourly.soil_temperature_0cm[0]) : null;
+  const soilTemp = w && w.hourly && w.hourly.soil_temperature_0cm ? Math.round(w.hourly.soil_temperature_0cm[0]) : null;
 
   // Mowing check
-  if (state.mow.lastMowed) {
-    const daysSince = Math.floor((Date.now() - new Date(state.mow.lastMowed)) / 86400000);
-    const dueIn = state.mow.freq - daysSince;
+  if (yard.mow.lastMowed) {
+    const daysSince = Math.floor((Date.now() - new Date(yard.mow.lastMowed)) / 86400000);
+    const dueIn = yard.mow.freq - daysSince;
     if (dueIn <= 1 && gp.pct > 20) {
-      tasks.push({ icon: '🌿', color: 'green', priority: dueIn <= 0 ? 'urgent' : 'suggested', title: 'Mow the lawn', desc: `${dueIn <= 0 ? 'Overdue by ' + Math.abs(dueIn) + ' day(s).' : 'Due ' + (dueIn === 0 ? 'today' : 'in 1 day') + '.'} Mow at ${state.mow.height}" with the 1/3 rule — never remove more than a third of the blade height.`, tag: 'mowing' });
+      tasks.push({ icon: '🌿', color: 'green', priority: dueIn <= 0 ? 'urgent' : 'suggested', title: 'Mow the lawn', desc: `${dueIn <= 0 ? 'Overdue by ' + Math.abs(dueIn) + ' day(s).' : 'Due ' + (dueIn === 0 ? 'today' : 'in 1 day') + '.'} Mow at ${yard.mow.height}" with the 1/3 rule — never remove more than a third of the blade height.`, tag: 'mowing' });
     }
   } else {
     tasks.push({ icon: '🌿', color: 'green', priority: 'info', title: 'Log your last mow date', desc: 'Head to the Mowing tab and enter when you last mowed so we can schedule future sessions.', tag: 'setup' });
@@ -532,9 +676,9 @@ function generateTasks(w) {
     tasks.push({ icon: '🌧️', color: 'blue', priority: 'info', title: 'Rain expected today', desc: `${rain0.toFixed(2)}" of rain is forecast — skip watering. Good day for herbicide or fertilizer applications if the soil is moist but not saturated.`, tag: 'irrigation' });
   }
 
-  // Pre-emergent timing (Texas timing for crabgrass, spring)
+  // Pre-emergent timing
   if (soilTemp !== null && soilTemp >= 50 && soilTemp <= 58) {
-    const lastTreat = getLastTreatmentOfType('pre-emergent');
+    const lastTreat = getLastTreatmentOfType(yardId, 'pre-emergent');
     if (!lastTreat || daysSinceTreat(lastTreat) > 60) {
       tasks.push({ icon: '🛡️', color: 'amber', priority: 'urgent', title: 'Apply pre-emergent herbicide', desc: `Soil temp is ${soilTemp}°F — the window for pre-emergent is now. Apply before soil hits 65°F or crabgrass and other weeds will germinate. Log after application in the Treatments tab.`, tag: 'weed control' });
     }
@@ -544,33 +688,31 @@ function generateTasks(w) {
   const warmSeason = ['bermuda','staugustine','zoysia','centipede','mixed'];
   if (warmSeason.includes(grass)) {
     if ((month >= 4 && month <= 5) || month === 9) {
-      const lastFert = getLastTreatmentOfType('fertilizer');
+      const lastFert = getLastTreatmentOfType(yardId, 'fertilizer');
       if (!lastFert || daysSinceTreat(lastFert) > 55) {
         tasks.push({ icon: '🌾', color: 'green', priority: 'suggested', title: 'Fertilizer application due', desc: `${month <= 5 ? 'Spring' : 'Fall'} is prime time to feed your ${grassName(grass)}. Use a balanced or slow-release fertilizer. Log after applying in the Treatments tab.`, tag: 'fertilizer' });
       }
     }
-    // Summer heat stress
     if (hi >= 100 && gp.pct < 30) {
       tasks.push({ icon: '🔥', color: 'red', priority: 'urgent', title: 'Heat stress alert', desc: `High of ${hi}°F forecast. Avoid mowing today — stress the lawn as little as possible. Water deeply if soil is dry. Do not fertilize in extreme heat.`, tag: 'weather' });
     }
   } else {
-    // Cool season
     if (month >= 9 && month <= 10) {
-      const lastFert = getLastTreatmentOfType('fertilizer');
+      const lastFert = getLastTreatmentOfType(yardId, 'fertilizer');
       if (!lastFert || daysSinceTreat(lastFert) > 55) {
         tasks.push({ icon: '🌾', color: 'green', priority: 'suggested', title: 'Fall fertilizer due', desc: 'Early fall is the most important fertilizer window for cool-season grasses. Use a winterizer blend high in potassium.', tag: 'fertilizer' });
       }
     }
   }
 
-  // Disease pressure — high humidity + warm
+  // Disease pressure
   if (hi >= 80 && rain7 >= 1.5) {
     tasks.push({ icon: '🔍', color: 'amber', priority: 'suggested', title: 'Scout for fungal disease', desc: 'Warm and wet conditions favor brown patch, dollar spot, and other fungal diseases. Walk your lawn and look for circular discolored patches. Use the Diagnose tab if you spot something unusual.', tag: 'disease' });
   }
 
   // Aeration season
   if ((warmSeason.includes(grass) && (month === 5 || month === 6)) || (!warmSeason.includes(grass) && month === 9)) {
-    const lastAer = getLastTreatmentOfType('aeration');
+    const lastAer = getLastTreatmentOfType(yardId, 'aeration');
     if (!lastAer || daysSinceTreat(lastAer) > 300) {
       tasks.push({ icon: '🌀', color: 'amber', priority: 'info', title: 'Consider aerating', desc: `${grass === 'bermuda' || grass === 'staugustine' ? 'Late spring/summer' : 'Early fall'} is ideal for aeration. Core aeration breaks up compaction and improves root depth.`, tag: 'lawn care' });
     }
@@ -583,51 +725,55 @@ function generateTasks(w) {
   return tasks;
 }
 
-function getLastTreatmentOfType(type) {
-  return state.treatments.filter(t => t.type === type).sort((a,b) => new Date(b.date) - new Date(a.date))[0] || null;
+function getLastTreatmentOfType(yardId, type) {
+  return state.yards[yardId].treatments.filter(t => t.type === type).sort((a,b) => new Date(b.date) - new Date(a.date))[0] || null;
 }
 
 function daysSinceTreat(t) {
   return Math.floor((Date.now() - new Date(t.date)) / 86400000);
 }
 
-function toggleTask(i) {
+function toggleTask(yardId, i) {
+  const yard = state.yards[yardId];
   const todayKey = new Date().toDateString();
-  if (!state.tasks[todayKey]) state.tasks[todayKey] = {};
-  state.tasks[todayKey][i] = !state.tasks[todayKey][i];
+  if (!yard.tasks[todayKey]) yard.tasks[todayKey] = {};
+  yard.tasks[todayKey][i] = !yard.tasks[todayKey][i];
   saveState();
-  const card = document.getElementById('task-' + i);
+  const card = document.getElementById(`task-${yardId}-${i}`);
   const btn = card.querySelector('.check-btn');
-  card.classList.toggle('done', state.tasks[todayKey][i]);
-  btn.classList.toggle('checked', state.tasks[todayKey][i]);
+  card.classList.toggle('done', yard.tasks[todayKey][i]);
+  btn.classList.toggle('checked', yard.tasks[todayKey][i]);
 }
 
 // MOWING
 function grassName(g) {
-  const map = { bermuda:'Bermuda', staugustine:'St. Augustine', zoysia:'Zoysia', centipede:'Centipede', 'tall-fescue':'Tall Fescue', 'kentucky-blue':'Kentucky Bluegrass', ryegrass:'Perennial Ryegrass', mixed:'your grass' };
-  return map[g] || 'your grass';
+  const map = { bermuda:'Bermuda', staugustine:'St. Augustine', zoysia:'Zoysia', centipede:'Centipede', 'tall-fescue':'Tall Fescue', 'kentucky-blue':'Kentucky Bluegrass', ryegrass:'Perennial Ryegrass', mixed:'Mixed/Unknown' };
+  return map[g] || 'Mixed/Unknown';
 }
 
 function renderMowing() {
-  document.getElementById('mow-height').value = state.mow.height || 3;
-  document.getElementById('mow-freq').value = state.mow.freq || 7;
-  document.getElementById('last-mowed').value = state.mow.lastMowed || '';
+  const yard = state.yards[activeYard.mowing];
+  document.getElementById('mow-height').value = yard.mow.height || 3;
+  document.getElementById('mow-freq').value = yard.mow.freq || 7;
+  document.getElementById('last-mowed').value = yard.mow.lastMowed || '';
   renderMowTimeline();
   renderMowTips();
 }
 
 function saveMowSettings() {
-  state.mow.height = parseFloat(document.getElementById('mow-height').value);
-  state.mow.freq = parseInt(document.getElementById('mow-freq').value);
-  state.mow.lastMowed = document.getElementById('last-mowed').value;
+  const yard = state.yards[activeYard.mowing];
+  yard.mow.height = parseFloat(document.getElementById('mow-height').value);
+  yard.mow.freq = parseInt(document.getElementById('mow-freq').value);
+  yard.mow.lastMowed = document.getElementById('last-mowed').value;
   saveState();
   renderMowTimeline();
 }
 
 function renderMowTimeline() {
   const el = document.getElementById('mow-timeline');
-  const lastMowed = state.mow.lastMowed;
-  const freq = state.mow.freq || 7;
+  const yard = state.yards[activeYard.mowing];
+  const lastMowed = yard.mow.lastMowed;
+  const freq = yard.mow.freq || 7;
   if (!lastMowed) {
     el.innerHTML = '<div class="empty-state"><p>Enter your last mow date above to see your schedule.</p></div>';
     return;
@@ -655,19 +801,95 @@ function renderMowTimeline() {
   }).join('');
 }
 
+// Returns 'spring' | 'summer' | 'fall' | 'dormant' based on current month and grass type.
+// Warm-season and cool-season grasses have different growth calendars, so seasons are computed separately.
+function getMowSeason(grass) {
+  const month = new Date().getMonth() + 1; // 1-12
+  const warmTypes = ['bermuda','staugustine','zoysia','centipede','mixed'];
+  const isWarm = warmTypes.includes(grass);
+
+  if (isWarm) {
+    // Warm-season: dormant in winter, green-up spring, peak summer, slow-down fall
+    if (month === 12 || month === 1 || month === 2) return 'dormant';
+    if (month >= 3 && month <= 5) return 'spring';
+    if (month >= 6 && month <= 8) return 'summer';
+    return 'fall'; // 9-11
+  } else {
+    // Cool-season: active spring/fall, summer stress, semi-dormant in hard winter
+    if (month === 12 || month === 1 || month === 2) return 'dormant';
+    if (month >= 3 && month <= 5) return 'spring';
+    if (month >= 6 && month <= 8) return 'summer';
+    return 'fall'; // 9-11
+  }
+}
+
+const seasonLabels = { spring: 'Spring', summer: 'Summer', fall: 'Fall', dormant: 'Winter dormancy' };
+
+const mowTipsBySeason = {
+  bermuda: {
+    spring: 'Bermuda — Spring green-up: Mow at 1–1.5" as growth resumes, scalping off winter blades early in the season to speed green-up. Frequency ramps up to weekly as temperatures climb.',
+    summer: 'Bermuda — Peak growth: Mow at 1–2", favoring the lower end. This is the fastest growth period — expect to mow every 4–5 days. Never remove more than 1/3 of blade height per cut.',
+    fall: 'Bermuda — Slowing down: Raise height slightly to 1.5–2" as growth slows with cooler temps. Reduce frequency to every 7–10 days. Last mow before dormancy can be slightly lower to remove excess thatch.',
+    dormant: 'Bermuda — Dormant: Bermuda goes brown and stops growing in winter. Mowing is rarely needed; only mow to clean up debris or winter weeds. Do not fertilize or scalp during true dormancy.'
+  },
+  staugustine: {
+    spring: 'St. Augustine — Spring green-up: Mow at 3–3.5" as new growth comes in. Avoid scalping old winter growth too aggressively. Frequency increases to weekly as temps rise.',
+    summer: 'St. Augustine — Peak heat: Mow at 3.5–4", favoring the taller end — extra height shades roots and reduces heat/drought stress. Mow weekly. Bag or mulch finely to avoid disease-promoting clumps.',
+    fall: 'St. Augustine — Slowing down: Maintain 3–3.5" as growth tapers off. Reduce frequency to every 10–14 days. Avoid cutting too short heading into cooler weather.',
+    dormant: 'St. Augustine — Dormant/semi-dormant: Growth nearly stops in cold weather. Mow only occasionally for cleanup. Keep height on the taller side (3"+) through any cold snaps to protect the crown.'
+  },
+  zoysia: {
+    spring: 'Zoysia — Spring green-up: Zoysia greens up slower than Bermuda or St. Augustine. Mow at 1.5–2" once active growth is visible, typically every 10–14 days.',
+    summer: 'Zoysia — Peak growth: Mow at 1.5–2.5". Still relatively slow-growing compared to other warm-season grasses — every 7–10 days is usually enough.',
+    fall: 'Zoysia — Slowing down: Raise to 2–2.5" as growth slows. Mow every 10–14 days. Reduce frequency further as temperatures drop.',
+    dormant: 'Zoysia — Dormant: Goes tan/brown and stops growing in winter. Minimal to no mowing needed. Avoid any cutting during hard frost periods.'
+  },
+  centipede: {
+    spring: 'Centipede — Spring green-up: Mow at 1.5–2" as growth resumes. Centipede is naturally slow-growing — avoid the urge to mow too frequently early in the season.',
+    summer: 'Centipede — Peak growth: Mow at 1.5–2". Every 10–14 days is typically sufficient even at peak growth. Avoid scalping — centipede is sensitive to low, frequent cuts.',
+    fall: 'Centipede — Slowing down: Maintain 1.5–2" and stretch mowing to every 14+ days as growth tapers.',
+    dormant: 'Centipede — Dormant: Minimal to no mowing in winter. Centipede is particularly slow to recover from winter damage, so avoid any unnecessary stress this time of year.'
+  },
+  'tall-fescue': {
+    spring: 'Tall Fescue — Active growth: Mow at 2.5–3" during peak spring growth. Mow frequently (every 5–7 days) since this is one of the fastest growth periods.',
+    summer: 'Tall Fescue — Summer stress: Raise to 3.5–4" — taller height is critical to protect roots from summer heat stress. Reduce mowing frequency as growth slows in the heat; avoid mowing during drought stress.',
+    fall: 'Tall Fescue — Active growth: Lower back to 2.5–3" as temperatures cool and growth resumes. This is the most important season for fescue — mow every 7–10 days.',
+    dormant: 'Tall Fescue — Winter: Growth slows significantly but rarely stops completely. Mow as needed at 2.5–3", less frequently, whenever the grass is dry and temperatures are above freezing.'
+  },
+  'kentucky-blue': {
+    spring: 'Kentucky Bluegrass — Active growth: Mow at 2.5–3" during vigorous spring growth, typically every 5–7 days.',
+    summer: 'Kentucky Bluegrass — Summer stress: Raise to 3–3.5" to help the lawn handle heat. Mow less frequently as growth slows; never scalp during hot, dry stretches.',
+    fall: 'Kentucky Bluegrass — Active growth: Maintain 2.5–3" as growth picks back up with cooler weather. This is prime growing season — mow weekly.',
+    dormant: 'Kentucky Bluegrass — Winter: Growth slows substantially. Mow infrequently at 2.5–3" only when needed and when grass is dry.'
+  },
+  ryegrass: {
+    spring: 'Perennial Ryegrass — Active growth: Mow at 2–2.5". This is peak growth season — may need mowing twice a week. Keep blades sharp to avoid fraying the fine leaf blades.',
+    summer: 'Perennial Ryegrass — Summer stress: Raise to 2.5–3" to reduce heat stress. Growth slows in high heat — reduce frequency accordingly.',
+    fall: 'Perennial Ryegrass — Active growth: Maintain 2–2.5" as growth resumes with cooler weather. Mow weekly to twice weekly.',
+    dormant: 'Perennial Ryegrass — Winter: Growth slows considerably in cold weather. Mow infrequently at 2–2.5" only as needed.'
+  },
+  mixed: {
+    spring: 'Mixed lawn — Spring green-up: Maintain 3–3.5" as a safe default while growth ramps up. Mow weekly, following the 1/3 rule — never remove more than a third of blade height per cut.',
+    summer: 'Mixed lawn — Peak heat: Favor the taller end, 3.5–4", to help shade roots and reduce heat stress. Mow as needed when the tallest grass reaches about 4.5–5".',
+    fall: 'Mixed lawn — Slowing down: Maintain 3–3.5" as growth slows with cooler weather. Reduce mowing frequency accordingly.',
+    dormant: 'Mixed lawn — Winter: Growth slows or stops depending on which grasses are present. Mow only as needed for cleanup; avoid scalping going into cold weather.'
+  }
+};
+
 function renderMowTips() {
-  const g = state.settings.grass;
-  const tips = {
-    bermuda: 'Bermuda: Mow at 1–2" with a reel or sharp rotary. Grows fast in summer — may need mowing every 5 days at peak. Never cut more than 1/3 of blade height at once.',
-    staugustine: 'St. Augustine: Mow at 3–4" — taller height shades out weeds and reduces heat stress. Avoid scalping. Bag or mulch clippings; clumps can promote disease.',
-    zoysia: 'Zoysia: Mow at 1.5–2.5". Very slow-growing — often only needs mowing every 10–14 days. Reel mower preferred for low-cut appearance.',
-    centipede: 'Centipede: Mow at 1.5–2". Grows slowly; over-mowing weakens it significantly. Avoid high nitrogen — centipede prefers a lean diet.',
-    'tall-fescue': 'Tall Fescue: Mow at 3.5–4" in summer, 2.5–3" in fall. Taller height is critical in summer heat. Mow every 7–10 days during active growth.',
-    'kentucky-blue': 'Kentucky Bluegrass: Mow at 2.5–3.5". Avoid low cuts in summer heat. Most active growth is spring and fall.',
-    ryegrass: 'Perennial Ryegrass: Mow at 2–3". Quick grower — may need mowing twice weekly in spring. Sharp blades are important to avoid fraying.',
-    mixed: 'Mixed lawn: Maintain at 3–3.5" as a safe default. Mow when the tallest grass reaches 4.5". Sharp blades and the 1/3 rule are the two most important practices for any lawn.'
-  };
-  document.getElementById('mow-tips').textContent = tips[g] || tips.mixed;
+  const yard = state.yards[activeYard.mowing];
+  const g = mowTipsBySeason[yard.grass] ? yard.grass : 'mixed';
+  const season = getMowSeason(g);
+  const tipText = mowTipsBySeason[g][season];
+
+  const el = document.getElementById('mow-tips');
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <span class="badge badge-green">${seasonLabels[season]}</span>
+      <span style="font-size:12px;color:var(--text-muted)">Updates automatically based on the current month</span>
+    </div>
+    <div>${tipText}</div>
+  `;
 }
 
 // TREATMENTS
@@ -678,17 +900,18 @@ function renderTreatments() {
 }
 
 function logTreatment() {
+  const yard = state.yards[activeYard.treatments];
   const t = {
     id: Date.now(),
     date: document.getElementById('treat-date').value,
     type: document.getElementById('treat-type').value,
     product: document.getElementById('treat-product').value || '—',
     rate: document.getElementById('treat-rate').value || '—',
-    area: document.getElementById('treat-area').value || state.settings.area || '—',
+    area: document.getElementById('treat-area').value || yard.area || '—',
     notes: document.getElementById('treat-notes').value
   };
   if (!t.date) { alert('Please select a date.'); return; }
-  state.treatments.unshift(t);
+  yard.treatments.unshift(t);
   saveState();
   document.getElementById('treat-product').value = '';
   document.getElementById('treat-rate').value = '';
@@ -700,8 +923,9 @@ const typeColors = { fertilizer: '#639922', 'pre-emergent': '#BA7517', 'post-eme
 
 function renderTreatList() {
   const el = document.getElementById('treat-list');
-  if (!state.treatments.length) { el.innerHTML = '<div class="empty-state"><p>No treatments logged yet.</p></div>'; return; }
-  el.innerHTML = state.treatments.map(t => `
+  const yard = state.yards[activeYard.treatments];
+  if (!yard.treatments.length) { el.innerHTML = '<div class="empty-state"><p>No treatments logged yet for ' + yard.name + '.</p></div>'; return; }
+  el.innerHTML = yard.treatments.map(t => `
     <div class="treat-row">
       <div class="treat-dot" style="background:${typeColors[t.type]||'#888'}"></div>
       <div class="treat-info">
@@ -713,13 +937,15 @@ function renderTreatList() {
 }
 
 function deleteTreatment(id) {
-  state.treatments = state.treatments.filter(t => t.id !== id);
+  const yard = state.yards[activeYard.treatments];
+  yard.treatments = yard.treatments.filter(t => t.id !== id);
   saveState();
   renderTreatList();
 }
 
 function renderAnnualProgram() {
-  const g = state.settings.grass;
+  const yard = state.yards[activeYard.treatments];
+  const g = yard.grass;
   const programs = {
     bermuda: `<strong>Bermuda Annual Program (Texas / South):</strong><br>
 • <strong>Feb–Mar:</strong> Pre-emergent (when soil hits 50°F). Scalp winter dormancy.<br>
@@ -763,8 +989,9 @@ function handleDiagImage(input) {
 }
 
 async function runDiagnosis(base64, mediaType) {
-  const grass = grassName(state.settings.grass);
-  const prompt = `You are an expert turfgrass agronomist specializing in residential lawn care in the Southern US. The user has a lawn with ${grass} grass in ${state.settings.location}. Analyze this photo for lawn issues.
+  const yard = state.yards[activeYard.diagnose];
+  const grass = grassName(yard.grass);
+  const prompt = `You are an expert turfgrass agronomist specializing in residential lawn care in the Southern US. The user has a lawn with ${grass} grass (this is their "${yard.name}") in ${state.location.location}. Analyze this photo for lawn issues.
 
 Provide a diagnosis in this format:
 1. **What I see** — Describe what's visible (color, pattern, extent)
@@ -834,11 +1061,11 @@ async function geocodeLocation() {
     const data = await res.json();
     if (data.results && data.results[0]) {
       const r = data.results[0];
-      state.settings.lat = r.latitude;
-      state.settings.lon = r.longitude;
-      state.settings.location = r.name + (r.admin1 ? ', ' + r.admin1 : '');
-      document.getElementById('set-location').value = state.settings.location;
-      status.textContent = `✓ Found: ${state.settings.location} (${r.latitude.toFixed(3)}, ${r.longitude.toFixed(3)})`;
+      state.location.lat = r.latitude;
+      state.location.lon = r.longitude;
+      state.location.location = r.name + (r.admin1 ? ', ' + r.admin1 : '');
+      document.getElementById('set-location').value = state.location.location;
+      status.textContent = `✓ Found: ${state.location.location} (${r.latitude.toFixed(3)}, ${r.longitude.toFixed(3)})`;
       status.style.color = 'var(--green-400)';
       state.weather = null;
       saveState();
@@ -847,19 +1074,24 @@ async function geocodeLocation() {
 }
 
 function loadSettingsForm() {
-  document.getElementById('set-location').value = state.settings.location || '';
-  document.getElementById('set-grass').value = state.settings.grass || 'mixed';
-  document.getElementById('set-area').value = state.settings.area || '';
-  document.getElementById('set-irrigation').value = state.settings.irrigation || 'sprinkler';
+  document.getElementById('set-location').value = state.location.location || '';
+  const yard = state.yards[activeYard.settings];
+  document.getElementById('settings-yard-label').textContent = yard.name + ' profile';
+  document.getElementById('set-yard-name').value = yard.name || '';
+  document.getElementById('set-grass').value = yard.grass || 'mixed';
+  document.getElementById('set-area').value = yard.area || '';
+  document.getElementById('set-irrigation').value = yard.irrigation || 'sprinkler';
 }
 
 function saveSettings() {
-  state.settings.grass = document.getElementById('set-grass').value;
-  state.settings.area = parseInt(document.getElementById('set-area').value) || state.settings.area;
-  state.settings.irrigation = document.getElementById('set-irrigation').value;
-  state.weather = null;
+  const yard = state.yards[activeYard.settings];
+  yard.name = document.getElementById('set-yard-name').value || yard.name;
+  yard.grass = document.getElementById('set-grass').value;
+  yard.area = parseInt(document.getElementById('set-area').value) || yard.area;
+  yard.irrigation = document.getElementById('set-irrigation').value;
   saveState();
-  alert('Settings saved!');
+  alert(yard.name + ' settings saved!');
+  renderYardSwitcher('settings-yard-switcher', 'settings', loadSettingsForm);
 }
 
 function exportData() {
@@ -870,7 +1102,7 @@ function exportData() {
 }
 
 function clearData() {
-  if (confirm('Clear all data? This cannot be undone.')) {
+  if (confirm('Clear all data for both yards? This cannot be undone.')) {
     localStorage.removeItem('lawnhq-state');
     location.reload();
   }
@@ -881,7 +1113,6 @@ loadState();
 state.weather = null;
 state.weatherDate = null;
 loadSettingsForm();
-renderMowing();
 renderToday();
 </script>
 </body>
