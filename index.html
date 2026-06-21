@@ -943,32 +943,119 @@ function deleteTreatment(id) {
   renderTreatList();
 }
 
+// Each program is an array of { months: [1,2,3...], label: "Feb-Mar", text: "..." } rows.
+// months lists the actual calendar months that row covers, so we can detect "is this row active now".
+const annualPrograms = {
+  bermuda: {
+    title: 'Bermuda Annual Program (Texas / South)',
+    rows: [
+      { months: [2,3], label: 'Feb–Mar', text: 'Pre-emergent (when soil hits 50°F). Scalp winter dormancy.' },
+      { months: [4,5], label: 'Apr–May', text: 'First fertilizer — 1 lb N / 1000 sq ft. Post-emergent for broadleaf weeds.' },
+      { months: [6,7], label: 'Jun–Jul', text: 'Second fertilizer. Aerate if compacted. Ensure deep watering.' },
+      { months: [8,9], label: 'Aug–Sep', text: 'Third fertilizer. Scout for armyworms and fungal issues.' },
+      { months: [10], label: 'Oct', text: 'Final fertilizer with potassium to prep for dormancy.' },
+      { months: [11,12,1], label: 'Nov–Jan', text: 'Dormancy. Reduce watering. Optional winter rye overseeding.' }
+    ]
+  },
+  staugustine: {
+    title: 'St. Augustine Annual Program',
+    rows: [
+      { months: [3], label: 'Mar', text: 'Pre-emergent when soil > 50°F. First fertilizer (slow-release).' },
+      { months: [4], label: 'Apr', text: 'Continue monitoring soil temp; treat any emerging broadleaf weeds.' },
+      { months: [5,6], label: 'May–Jun', text: 'Second fertilizer. Treat for chinch bugs if spotted.' },
+      { months: [7,8], label: 'Jul–Aug', text: 'Minimal fertilizer. Scout for brown patch in wet periods.' },
+      { months: [9], label: 'Sep', text: 'Last fertilizer. Treat broadleaf weeds.' },
+      { months: [10], label: 'Oct', text: 'Reduce mowing frequency; prep for dormancy.' },
+      { months: [11,12,1,2], label: 'Nov–Feb', text: 'Dormancy. Reduce water. No fertilizer.' }
+    ]
+  },
+  zoysia: {
+    title: 'Zoysia Annual Program',
+    rows: [
+      { months: [3,4], label: 'Mar–Apr', text: 'Pre-emergent once soil hits 50–55°F. Zoysia greens up later than Bermuda — be patient before fertilizing.' },
+      { months: [5], label: 'May', text: 'First fertilizer once green-up is well underway (light nitrogen application).' },
+      { months: [6,7], label: 'Jun–Jul', text: 'Second fertilizer. Aerate if compacted — Zoysia is prone to thatch buildup.' },
+      { months: [8], label: 'Aug', text: 'Optional light fertilizer. Scout for billbugs and brown patch in humid conditions.' },
+      { months: [9,10], label: 'Sep–Oct', text: 'Final fertilizer with potassium to harden off before dormancy.' },
+      { months: [11,12,1,2], label: 'Nov–Feb', text: 'Dormancy. Zoysia browns out earlier and stays dormant longer than Bermuda. No fertilizer.' }
+    ]
+  },
+  centipede: {
+    title: 'Centipede Annual Program',
+    rows: [
+      { months: [3,4], label: 'Mar–Apr', text: 'Pre-emergent when soil hits 50–55°F. Centipede prefers a lean diet — avoid high-nitrogen products.' },
+      { months: [5], label: 'May', text: 'First light fertilizer (low nitrogen, e.g. 15-0-15) once green-up is complete.' },
+      { months: [6,7], label: 'Jun–Jul', text: 'Monitor for ground pearls and large patch disease. Avoid over-fertilizing — centipede is sensitive to excess nitrogen.' },
+      { months: [8,9], label: 'Aug–Sep', text: 'Optional second light feeding if growth looks weak. Continue disease scouting in humid weather.' },
+      { months: [10], label: 'Oct', text: 'Final light potassium application to prep for winter — helps with cold tolerance.' },
+      { months: [11,12,1,2], label: 'Nov–Feb', text: 'Dormancy. Centipede is slow to recover from winter damage — avoid foot traffic on dormant turf.' }
+    ]
+  },
+  'tall-fescue': {
+    title: 'Tall Fescue Annual Program',
+    rows: [
+      { months: [2,3], label: 'Feb–Mar', text: 'Pre-emergent for spring weeds. Begin regular mowing as growth resumes.' },
+      { months: [4,5], label: 'Apr–May', text: 'Spring fertilizer application. This is peak growing season — monitor closely.' },
+      { months: [6,7,8], label: 'Jun–Aug', text: 'Minimal fertilizer — focus on deep, infrequent watering to manage summer stress. Avoid pre-emergent in extreme heat.' },
+      { months: [9], label: 'Sep', text: 'Core aeration and overseeding — early fall is the best window for cool-season seeding.' },
+      { months: [10], label: 'Oct', text: 'Fall fertilizer (most important feeding of the year) to build root reserves before winter.' },
+      { months: [11,12,1], label: 'Nov–Jan', text: 'Growth slows but rarely stops fully. Light winterizer fertilizer optional in late fall.' }
+    ]
+  },
+  'kentucky-blue': {
+    title: 'Kentucky Bluegrass Annual Program',
+    rows: [
+      { months: [2,3], label: 'Feb–Mar', text: 'Pre-emergent for crabgrass. Begin mowing as growth resumes.' },
+      { months: [4,5], label: 'Apr–May', text: 'Spring fertilizer application during vigorous spring growth.' },
+      { months: [6,7,8], label: 'Jun–Aug', text: 'Reduce fertilizer; focus on deep watering to handle summer stress and potential dormancy.' },
+      { months: [9], label: 'Sep', text: 'Core aeration and overseeding — Kentucky Bluegrass spreads via rhizomes and recovers well from fall seeding.' },
+      { months: [10], label: 'Oct', text: 'Fall fertilizer — critical feeding window to build winter root reserves.' },
+      { months: [11,12,1], label: 'Nov–Jan', text: 'Growth slows substantially in cold weather. Optional light winterizer in late fall.' }
+    ]
+  },
+  ryegrass: {
+    title: 'Perennial Ryegrass Annual Program',
+    rows: [
+      { months: [2,3], label: 'Feb–Mar', text: 'Pre-emergent for spring weeds. Ryegrass resumes rapid growth early — mowing frequency increases quickly.' },
+      { months: [4,5], label: 'Apr–May', text: 'Spring fertilizer. Peak growth period — may need mowing twice weekly.' },
+      { months: [6,7,8], label: 'Jun–Aug', text: 'Reduce fertilizer; ryegrass struggles in high heat. Water deeply and avoid stress during heat waves.' },
+      { months: [9], label: 'Sep', text: 'Overseed thin areas — early fall is ideal for ryegrass establishment.' },
+      { months: [10], label: 'Oct', text: 'Fall fertilizer to support strong root development before winter.' },
+      { months: [11,12,1], label: 'Nov–Jan', text: 'Growth slows in cold weather but rarely stops completely. Mow as needed.' }
+    ]
+  },
+  mixed: {
+    title: 'General Program (Mixed Lawn)',
+    rows: [
+      { months: [2,3], label: 'Feb–Mar', text: 'Pre-emergent when soil hits 50–55°F.' },
+      { months: [4,5], label: 'Apr–May', text: 'Spring fertilizer — balanced NPK or slow-release.' },
+      { months: [6,7], label: 'Jun–Jul', text: 'Monitor for weeds and pests. Water deeply 1–2x/week.' },
+      { months: [8,9], label: 'Aug–Sep', text: 'Second fertilizer. Post-emergent weed control.' },
+      { months: [10], label: 'Oct', text: 'Winterizer fertilizer with potassium.' },
+      { months: [11,12,1], label: 'Nov–Jan', text: 'Dormancy management. Mow low before first frost.' }
+    ]
+  }
+};
+
 function renderAnnualProgram() {
   const yard = state.yards[activeYard.treatments];
-  const g = yard.grass;
-  const programs = {
-    bermuda: `<strong>Bermuda Annual Program (Texas / South):</strong><br>
-• <strong>Feb–Mar:</strong> Pre-emergent (when soil hits 50°F). Scalp winter dormancy.<br>
-• <strong>Apr–May:</strong> First fertilizer — 1 lb N / 1000 sq ft. Post-emergent for broadleaf weeds.<br>
-• <strong>Jun–Jul:</strong> Second fertilizer. Aerate if compacted. Ensure deep watering.<br>
-• <strong>Aug–Sep:</strong> Third fertilizer. Scout for armyworms and fungal issues.<br>
-• <strong>Oct:</strong> Final fertilizer with potassium to prep for dormancy.<br>
-• <strong>Nov–Jan:</strong> Dormancy. Reduce watering. Optional winter rye overseeding.`,
-    staugustine: `<strong>St. Augustine Annual Program:</strong><br>
-• <strong>Mar:</strong> Pre-emergent when soil > 50°F. First fertilizer (slow-release).<br>
-• <strong>May–Jun:</strong> Second fertilizer. Treat for chinch bugs if spotted.<br>
-• <strong>Jul–Aug:</strong> Minimal fertilizer. Scout for brown patch in wet periods.<br>
-• <strong>Sep:</strong> Last fertilizer. Treat broadleaf weeds.<br>
-• <strong>Nov–Feb:</strong> Dormancy. Reduce water. No fertilizer.`,
-    mixed: `<strong>General Program (Mixed Lawn):</strong><br>
-• <strong>Feb–Mar:</strong> Pre-emergent when soil hits 50–55°F.<br>
-• <strong>Apr–May:</strong> Spring fertilizer — balanced NPK or slow-release.<br>
-• <strong>Jun–Jul:</strong> Monitor for weeds and pests. Water deeply 1–2x/week.<br>
-• <strong>Aug–Sep:</strong> Second fertilizer. Post-emergent weed control.<br>
-• <strong>Oct:</strong> Winterizer fertilizer with potassium.<br>
-• <strong>Nov–Jan:</strong> Dormancy management. Mow low before first frost.`
-  };
-  document.getElementById('annual-program').innerHTML = programs[g] || programs.mixed;
+  const g = annualPrograms[yard.grass] ? yard.grass : 'mixed';
+  const program = annualPrograms[g];
+  const currentMonth = new Date().getMonth() + 1;
+
+  const rowsHtml = program.rows.map(row => {
+    const isCurrent = row.months.includes(currentMonth);
+    return `
+      <div style="display:flex;gap:10px;padding:8px 10px;border-radius:8px;margin-bottom:4px;${isCurrent ? 'background:var(--green-50);border:1px solid var(--green-100)' : ''}">
+        <div style="flex-shrink:0;width:72px;font-weight:600;${isCurrent ? 'color:var(--green-800)' : 'color:var(--text)'}">${row.label}</div>
+        <div style="flex:1;${isCurrent ? 'color:var(--green-800)' : ''}">${row.text}${isCurrent ? ' <span class="badge badge-green" style="margin-left:4px">Now</span>' : ''}</div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('annual-program').innerHTML = `
+    <div style="font-weight:600;margin-bottom:10px;color:var(--text);font-size:14px">${program.title}</div>
+    ${rowsHtml}
+  `;
 }
 
 // DIAGNOSE
