@@ -114,6 +114,11 @@
   .diag-drop p { color: var(--text-muted); font-size: 14px; margin-top: 8px; }
   .diag-result { margin-top: 1rem; }
   .diag-img { max-width: 100%; border-radius: var(--radius-sm); margin-bottom: 1rem; max-height: 300px; object-fit: cover; }
+  .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+  .photo-card { cursor: pointer; border-radius: var(--radius-sm); overflow: hidden; border: 0.5px solid var(--border); background: var(--surface); transition: transform 0.15s; }
+  .photo-card:hover { transform: translateY(-2px); }
+  .photo-card img { width: 100%; height: 100px; object-fit: cover; display: block; }
+  .photo-card-date { font-size: 11px; color: var(--text-muted); padding: 6px 8px; text-align: center; }
   #diag-answer { font-size: 14px; line-height: 1.7; color: var(--text); white-space: pre-wrap; }
   .loading-dots { display: inline-flex; gap: 4px; }
   .loading-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--green-400); animation: blink 1.2s ease-in-out infinite; }
@@ -126,6 +131,17 @@
   .mow-row .mow-status { flex: 1; font-weight: 500; }
   .setup-notice { background: var(--amber-50); border: 0.5px solid var(--amber-200); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1.5rem; }
   .setup-notice p { font-size: 14px; color: var(--amber-800); line-height: 1.6; }
+  .alert-card { display: flex; align-items: flex-start; gap: 10px; padding: 0.9rem 1.1rem; border-radius: var(--radius); margin-bottom: 8px; border: 0.5px solid; }
+  .alert-card:last-child { margin-bottom: 0; }
+  .alert-card.alert-extreme, .alert-card.alert-severe { background: var(--red-50); border-color: var(--red-100); }
+  .alert-card.alert-moderate { background: var(--amber-50); border-color: var(--amber-200); }
+  .alert-card.alert-minor, .alert-card.alert-unknown { background: var(--blue-50); border-color: var(--blue-100); }
+  .alert-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  .alert-title { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+  .alert-card.alert-extreme .alert-title, .alert-card.alert-severe .alert-title { color: var(--red-800); }
+  .alert-card.alert-moderate .alert-title { color: var(--amber-800); }
+  .alert-card.alert-minor .alert-title, .alert-card.alert-unknown .alert-title { color: var(--blue-800); }
+  .alert-desc { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
   .progress-bar { height: 6px; background: var(--gray-100); border-radius: 3px; overflow: hidden; margin-top: 8px; }
   .progress-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
   .conditions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
@@ -178,6 +194,8 @@
     <div id="setup-notice" class="setup-notice" style="display:none">
       <p>⚙️ <strong>Set up your lawn</strong> — Go to Settings to enter your location and grass type for each yard so we can show personalized recommendations.</p>
     </div>
+
+    <div id="alert-banner" style="display:none;margin-bottom:1.5rem"></div>
 
     <div id="weather-strip" class="weather-strip"></div>
 
@@ -294,6 +312,9 @@
       </div>
       <button class="btn btn-sm" style="margin-top:10px" onclick="resetDiag()">← Diagnose another area</button>
     </div>
+
+    <p class="section-title" style="margin-top:2rem">Photo timeline</p>
+    <div id="photo-timeline"></div>
   </div>
 
   <!-- SETTINGS PAGE -->
@@ -369,7 +390,9 @@ function defaultYard(name) {
     irrigation: 'sprinkler',
     tasks: {},
     treatments: [],
-    mow: { height: 3, freq: 7, lastMowed: '' }
+    mow: { height: 3, freq: 7, lastMowed: '' },
+    gdd: { total: 0, lastUpdated: null, log: [] },
+    photos: []  // photo timeline: { id, date, thumbnail (compressed base64), diagnosis text }
   };
 }
 
@@ -455,7 +478,7 @@ function showPage(name) {
   if (name === 'today') renderToday();
   if (name === 'mowing') { renderYardSwitcher('mow-yard-switcher', 'mowing', renderMowing); renderMowing(); }
   if (name === 'treatments') { renderYardSwitcher('treat-yard-switcher', 'treatments', renderTreatments); renderTreatments(); }
-  if (name === 'diagnose') { renderYardSwitcher('diag-yard-switcher', 'diagnose', null); }
+  if (name === 'diagnose') { renderYardSwitcher('diag-yard-switcher', 'diagnose', renderPhotoTimeline); renderPhotoTimeline(); }
   if (name === 'settings') { renderYardSwitcher('settings-yard-switcher', 'settings', loadSettingsForm); loadSettingsForm(); }
 }
 
@@ -478,6 +501,7 @@ function switchYard(tabKey, yardId, callback) {
   );
   if (tabKey === 'mowing') renderMowing();
   if (tabKey === 'treatments') renderTreatments();
+  if (tabKey === 'diagnose') renderPhotoTimeline();
   if (tabKey === 'settings') loadSettingsForm();
 }
 
@@ -494,6 +518,53 @@ async function fetchWeather() {
     saveState();
     return data;
   } catch(e) { return null; }
+}
+
+// NWS ALERTS — free, no key required, US-only. Returns active alerts (freeze warnings, severe storms, etc.) for the property's location.
+let nwsAlertsCache = { date: null, alerts: [] };
+
+async function fetchNwsAlerts() {
+  const today = new Date().toDateString();
+  if (nwsAlertsCache.date === today) return nwsAlertsCache.alerts;
+  try {
+    const url = `https://api.weather.gov/alerts/active?point=${state.location.lat},${state.location.lon}`;
+    const res = await fetch(url, { headers: { 'Accept': 'application/geo+json' } });
+    if (!res.ok) { nwsAlertsCache = { date: today, alerts: [] }; return []; }
+    const data = await res.json();
+    const alerts = (data.features || []).map(f => ({
+      id: f.properties.id,
+      event: f.properties.event,
+      headline: f.properties.headline,
+      severity: f.properties.severity,
+      description: f.properties.description,
+      expires: f.properties.expires
+    }));
+    nwsAlertsCache = { date: today, alerts };
+    return alerts;
+  } catch(e) {
+    nwsAlertsCache = { date: today, alerts: [] };
+    return [];
+  }
+}
+
+function renderAlertBanner(alerts) {
+  const el = document.getElementById('alert-banner');
+  if (!alerts || !alerts.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+
+  // Sort so the most severe alert shows first
+  const severityRank = { Extreme: 4, Severe: 3, Moderate: 2, Minor: 1, Unknown: 0 };
+  const sorted = [...alerts].sort((a,b) => (severityRank[b.severity]||0) - (severityRank[a.severity]||0));
+
+  el.style.display = 'block';
+  el.innerHTML = sorted.map(a => `
+    <div class="alert-card alert-${(a.severity || 'unknown').toLowerCase()}">
+      <div class="alert-icon">⚠️</div>
+      <div class="alert-content">
+        <div class="alert-title">${a.event}</div>
+        <div class="alert-desc">${a.headline || ''}</div>
+      </div>
+    </div>
+  `).join('');
 }
 
 function wmoToIcon(code) {
@@ -521,6 +592,10 @@ async function renderToday() {
   const w = await fetchWeather();
   renderWeatherStrip(w);
   renderYardsToday(w);
+
+  if (hasSetup) {
+    fetchNwsAlerts().then(renderAlertBanner);
+  }
 }
 
 function renderWeatherStrip(w) {
@@ -574,7 +649,9 @@ function renderConditions(w, yardId) {
   const hi = Math.round(d.temperature_2m_max[0]);
   const lo = Math.round(d.temperature_2m_min[0]);
 
-  const growthPotential = calcGrowthPotential(hi, lo, yard.grass);
+  updateGddLog(yard, hi, lo);
+  const growthPotential = calcGrowthPotential(soilTemp, yard.grass);
+  const gddTotal = Math.round((yard.gdd && yard.gdd.total) || 0);
 
   el.innerHTML = `
     <div class="cond-card">
@@ -598,22 +675,63 @@ function renderConditions(w, yardId) {
       <div class="cond-label">Water need today</div>
       <div class="cond-value">${et.toFixed(2)}"</div>
     </div>` : ''}
+    <div class="cond-card">
+      <div class="cond-icon">📈</div>
+      <div class="cond-label">Season GDD total</div>
+      <div class="cond-value">${gddTotal}</div>
+    </div>
   `;
 }
 
-function calcGrowthPotential(hi, lo, grass) {
-  const avg = (hi + lo) / 2;
-  const warmTypes = ['bermuda','staugustine','zoysia','centipede','mixed'];
-  const isWarm = warmTypes.includes(grass);
-  let pct = 0;
-  if (isWarm) {
-    if (avg >= 60 && avg <= 100) pct = Math.round(100 - Math.abs(avg - 85) * 3);
-  } else {
-    if (avg >= 35 && avg <= 85) pct = Math.round(100 - Math.abs(avg - 65) * 3);
+// GROWTH POTENTIAL — based on the PACE Turf Growth Potential (GP) model, a real industry-standard formula.
+// Unlike a simple temperature average, GP uses a bell-curve response to a grass-specific OPTIMAL soil temperature,
+// so growth potential rises smoothly toward 100% near the ideal temp and falls off on either side — matching
+// how turfgrass actually responds to temperature rather than a linear approximation.
+//
+// Optimal soil temps (°F) and curve "width" constants are approximate published values per species.
+const gddProfiles = {
+  bermuda:      { optimal: 95, width: 12 },
+  staugustine:  { optimal: 90, width: 13 },
+  zoysia:       { optimal: 90, width: 12 },
+  centipede:    { optimal: 88, width: 12 },
+  mixed:        { optimal: 90, width: 13 },   // warm-season default
+  'tall-fescue':    { optimal: 68, width: 11 },
+  'kentucky-blue':  { optimal: 68, width: 10 },
+  ryegrass:         { optimal: 68, width: 11 }
+};
+
+function calcGrowthPotential(soilTempF, grass) {
+  const profile = gddProfiles[grass] || gddProfiles.mixed;
+  if (soilTempF === null || soilTempF === undefined) {
+    return { pct: 0, label: 'Unknown' };
   }
-  pct = Math.max(0, Math.min(100, pct));
-  const label = pct >= 75 ? 'High' : pct >= 40 ? 'Moderate' : pct >= 15 ? 'Low' : 'Dormant';
-  return { pct, label };
+  // Gaussian-style bell curve centered on the optimal soil temp — this is the actual shape PACE Turf's GP model uses.
+  const diff = soilTempF - profile.optimal;
+  const pct = Math.round(100 * Math.exp(-(diff * diff) / (2 * profile.width * profile.width)));
+  const clamped = Math.max(0, Math.min(100, pct));
+  const label = clamped >= 75 ? 'High' : clamped >= 40 ? 'Moderate' : clamped >= 15 ? 'Low' : 'Dormant';
+  return { pct: clamped, label };
+}
+
+// Updates a yard's rolling GDD accumulation once per day. GDD = max(0, avgTemp - baseTemp), summed over time.
+// Base temps: 50°F for warm-season grasses (growth essentially stops below this), 32°F for cool-season.
+function updateGddLog(yard, hi, lo) {
+  const todayKey = new Date().toDateString();
+  if (yard.gdd.lastUpdated === todayKey) return; // already logged today
+
+  const warmTypes = ['bermuda','staugustine','zoysia','centipede','mixed'];
+  const isWarm = warmTypes.includes(yard.grass);
+  const base = isWarm ? 50 : 32;
+  const avg = (hi + lo) / 2;
+  const dailyGdd = Math.max(0, avg - base);
+
+  yard.gdd.total = (yard.gdd.total || 0) + dailyGdd;
+  yard.gdd.lastUpdated = todayKey;
+  yard.gdd.log = yard.gdd.log || [];
+  yard.gdd.log.push({ date: todayKey, gdd: Math.round(dailyGdd * 10) / 10 });
+  // Keep only the last 14 days in the log to avoid unbounded growth
+  if (yard.gdd.log.length > 14) yard.gdd.log = yard.gdd.log.slice(-14);
+  saveState();
 }
 
 function renderTasks(w, yardId) {
@@ -653,8 +771,8 @@ function generateTasks(w, yardId) {
   const hi = d ? Math.round(d.temperature_2m_max[0]) : 75;
   const rain0 = d ? d.precipitation_sum[0] : 0;
   const rain7 = d ? d.precipitation_sum.slice(0,7).reduce((a,b)=>a+b,0) : 0;
-  const gp = calcGrowthPotential(hi, (d ? Math.round(d.temperature_2m_min[0]) : 55), grass);
   const soilTemp = w && w.hourly && w.hourly.soil_temperature_0cm ? Math.round(w.hourly.soil_temperature_0cm[0]) : null;
+  const gp = calcGrowthPotential(soilTemp, grass);
 
   // Mowing check
   if (yard.mow.lastMowed) {
@@ -899,18 +1017,50 @@ function renderTreatments() {
   renderAnnualProgram();
 }
 
+// Typical minimum re-application intervals (in days) by treatment type — general industry guidance, not product-specific.
+const treatmentCooldowns = {
+  fertilizer: { days: 42, label: '6 weeks' },
+  'pre-emergent': { days: 60, label: '8-9 weeks' },
+  'post-emergent': { days: 21, label: '3 weeks' },
+  fungicide: { days: 21, label: '3 weeks' },
+  insecticide: { days: 30, label: '4 weeks' },
+  aeration: { days: 180, label: '6 months' },
+  overseeding: { days: 180, label: '6 months' },
+  topdressing: { days: 90, label: '3 months' }
+};
+
 function logTreatment() {
   const yard = state.yards[activeYard.treatments];
+  const type = document.getElementById('treat-type').value;
+  const date = document.getElementById('treat-date').value;
+  if (!date) { alert('Please select a date.'); return; }
+
+  // Cooldown check — warn if logging this type sooner than typically recommended
+  const cooldown = treatmentCooldowns[type];
+  if (cooldown) {
+    const last = getLastTreatmentOfType(activeYard.treatments, type);
+    if (last) {
+      const daysSinceLast = Math.floor((new Date(date) - new Date(last.date)) / 86400000);
+      if (daysSinceLast >= 0 && daysSinceLast < cooldown.days) {
+        const proceed = confirm(
+          `Heads up: the last ${type.replace('-', ' ')} application for ${yard.name} was only ${daysSinceLast} day(s) ago. ` +
+          `Most products recommend waiting about ${cooldown.label} between applications.\n\n` +
+          `Log it anyway?`
+        );
+        if (!proceed) return;
+      }
+    }
+  }
+
   const t = {
     id: Date.now(),
-    date: document.getElementById('treat-date').value,
-    type: document.getElementById('treat-type').value,
+    date: date,
+    type: type,
     product: document.getElementById('treat-product').value || '—',
     rate: document.getElementById('treat-rate').value || '—',
     area: document.getElementById('treat-area').value || yard.area || '—',
     notes: document.getElementById('treat-notes').value
   };
-  if (!t.date) { alert('Please select a date.'); return; }
   yard.treatments.unshift(t);
   saveState();
   document.getElementById('treat-product').value = '';
@@ -1059,20 +1209,65 @@ function renderAnnualProgram() {
 }
 
 // DIAGNOSE
+// Compresses an uploaded image down to a small thumbnail (max ~400px wide, JPEG quality 0.6) before storing,
+// since localStorage has limited space (~5-10MB) and full-resolution photos would fill that up fast.
+function compressImageForStorage(dataUrl, maxWidth) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxWidth / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.6));
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+
 function handleDiagImage(input) {
   if (!input.files[0]) return;
   const file = input.files[0];
   const reader = new FileReader();
   reader.onload = async (e) => {
-    const base64 = e.target.result.split(',')[1];
+    const fullDataUrl = e.target.result;
+    const base64 = fullDataUrl.split(',')[1];
     const mediaType = file.type || 'image/jpeg';
-    document.getElementById('diag-preview').src = e.target.result;
+    document.getElementById('diag-preview').src = fullDataUrl;
     document.getElementById('diag-result').style.display = 'block';
     document.getElementById('diag-drop').style.display = 'none';
     document.getElementById('diag-answer').innerHTML = `<div class="loading-dots"><span></span><span></span><span></span></div><span style="color:var(--text-muted);font-size:13px;margin-left:8px">Analyzing your lawn photo...</span>`;
-    await runDiagnosis(base64, mediaType);
+    const diagnosisText = await runDiagnosis(base64, mediaType);
+    if (diagnosisText) {
+      const thumbnail = await compressImageForStorage(fullDataUrl, 400);
+      if (thumbnail) saveToPhotoTimeline(thumbnail, diagnosisText);
+    }
   };
   reader.readAsDataURL(file);
+}
+
+function saveToPhotoTimeline(thumbnail, diagnosisText) {
+  const yard = state.yards[activeYard.diagnose];
+  if (!yard.photos) yard.photos = [];
+  yard.photos.unshift({
+    id: Date.now(),
+    date: new Date().toISOString(),
+    thumbnail: thumbnail,
+    diagnosis: diagnosisText
+  });
+  // Cap stored photos to keep localStorage usage reasonable
+  if (yard.photos.length > 20) yard.photos = yard.photos.slice(0, 20);
+  try {
+    saveState();
+  } catch(e) {
+    // Likely a quota error — drop the oldest photos and retry once
+    yard.photos = yard.photos.slice(0, 5);
+    try { saveState(); } catch(e2) { /* give up silently, diagnosis still shown on screen */ }
+  }
+  if (document.getElementById('photo-timeline')) renderPhotoTimeline();
 }
 
 async function runDiagnosis(base64, mediaType) {
@@ -1105,8 +1300,10 @@ Be specific, practical, and concise. If multiple issues are visible, address the
     const data = await res.json();
     const text = data.content?.[0]?.text || 'Could not analyze the image. Please try again.';
     document.getElementById('diag-answer').innerHTML = formatMarkdown(text);
+    return text;
   } catch(e) {
     document.getElementById('diag-answer').textContent = 'Error connecting to AI — please check your internet connection and try again.';
+    return null;
   }
 }
 
@@ -1121,6 +1318,53 @@ function resetDiag() {
   document.getElementById('diag-result').style.display = 'none';
   document.getElementById('diag-drop').style.display = 'block';
   document.getElementById('diag-input').value = '';
+}
+
+function renderPhotoTimeline() {
+  const el = document.getElementById('photo-timeline');
+  if (!el) return;
+  const yard = state.yards[activeYard.diagnose];
+  const photos = yard.photos || [];
+
+  if (!photos.length) {
+    el.innerHTML = '<div class="empty-state"><p>No photos diagnosed yet for ' + yard.name + '. Upload one above to start a timeline.</p></div>';
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="photo-grid">
+      ${photos.map(p => `
+        <div class="photo-card" onclick="viewTimelinePhoto(${p.id})">
+          <img src="${p.thumbnail}" alt="Lawn photo from ${formatPhotoDate(p.date)}">
+          <div class="photo-card-date">${formatPhotoDate(p.date)}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function formatPhotoDate(isoDate) {
+  return new Date(isoDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function viewTimelinePhoto(photoId) {
+  const yard = state.yards[activeYard.diagnose];
+  const photo = (yard.photos || []).find(p => p.id === photoId);
+  if (!photo) return;
+
+  // Reuse the existing diagnose result view to show the full photo + diagnosis
+  document.getElementById('diag-preview').src = photo.thumbnail;
+  document.getElementById('diag-answer').innerHTML = formatMarkdown(photo.diagnosis);
+  document.getElementById('diag-result').style.display = 'block';
+  document.getElementById('diag-drop').style.display = 'none';
+  document.getElementById('diag-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function deleteTimelinePhoto(photoId) {
+  const yard = state.yards[activeYard.diagnose];
+  yard.photos = (yard.photos || []).filter(p => p.id !== photoId);
+  saveState();
+  renderPhotoTimeline();
 }
 
 // Drag and drop
